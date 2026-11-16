@@ -64,7 +64,9 @@ export async function move(room,id,data) {
  const sql=db();const [r]=await sql`SELECT paused,scenarios,active_index FROM rooms WHERE id=${room}`;
  if(!r||r.paused)throw new Error('Simulation en pause');
  const x=Number(data.x), y=Number(data.y);
- if(!canMoveAvatar(x,y,r.scenarios,r.active_index)) throw new Error('Déplacement bloqué par un obstacle');
+ if(!canMoveAvatar(x,y,r.scenarios,r.active_index)){await event(room,id,'blocked',{x,y,reason:'obstacle'});throw new Error('Déplacement bloqué par un obstacle');}
+ const sqlOthers=await sql`SELECT id,avatar FROM room_participants WHERE room_id=${room} AND id<>${id} AND last_seen_at>now()-interval '30 seconds'`;
+ if(sqlOthers.some(p=>Math.hypot(x-Number(p.avatar?.x||0),y-Number(p.avatar?.y||0))<24)){await event(room,id,'blocked',{x,y,reason:'coactivite'});throw new Error('Déplacement bloqué par un autre agent');}
  const [p]=await sql`SELECT avatar FROM room_participants WHERE room_id=${room} AND id=${id}`;
  if(!p)throw new Error('Avatar inconnu');
  const current=p.avatar||{};
