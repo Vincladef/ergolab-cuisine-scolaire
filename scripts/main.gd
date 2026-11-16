@@ -665,4 +665,5 @@ func _toggle_lock() -> void:
 
 func _audit_canvas_layout() -> void:
     await get_tree().process_frame
+    status_label.text = "Carte pos=" + str(canvas.position) + " dim=" + str(canvas.size) + " zone=" + str(canvas.get_parent().size) + " visible=" + str(canvas.is_visible_in_tree())
     print("ERGOLAB_CANVAS_GEOMETRY pos=", canvas.position, " size=", canvas.size, " visible=", canvas.is_visible_in_tree(), " parent=", canvas.get_parent().size)
