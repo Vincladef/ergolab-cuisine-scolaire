@@ -201,6 +201,7 @@ func _construct_interface() -> void:
     room_controls.add_child(room_details)
 
     var columns := HBoxContainer.new()
+    columns.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     columns.size_flags_vertical = Control.SIZE_EXPAND_FILL
     columns.add_theme_constant_override("separation", 0)
     body.add_child(columns)
