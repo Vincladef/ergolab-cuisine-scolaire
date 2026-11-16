@@ -84,6 +84,25 @@ var is_loading: bool = false
 var last_world_mouse: Vector2 = Vector2.ZERO
 var local_distance: float = 0.0
 var action_started: int = 0
+var palette_open: bool = true
+var show_blueprint: bool = false
+var palette_panel: Control
+var stage_panel: Control
+var hint_label: Label
+var viewport_initialized: bool = false
+var walking: bool = false
+var direction_facing: Vector2 = Vector2.DOWN
+var animation_clock: float = 0.0
+var camera_dragging: bool = false
+var floor_mother: PackedVector2Array = PackedVector2Array([
+    Vector2(123,705),Vector2(105,610),Vector2(106,480),Vector2(128,379),
+    Vector2(176,291),Vector2(256,233),Vector2(374,206),Vector2(482,222),
+    Vector2(564,269),Vector2(620,358),Vector2(615,701)
+])
+var floor_primary: PackedVector2Array = PackedVector2Array([
+    Vector2(433,727),Vector2(825,727),Vector2(918,818),
+    Vector2(944,965),Vector2(432,965)
+])
 
 func _ready() -> void:
     RenderingServer.set_default_clear_color(Color("#E6E7DF"))
@@ -95,7 +114,20 @@ func _ready() -> void:
         var tex_path: String = "res://assets/equipment/%s.png" % id
         if ResourceLoader.exists(tex_path):
             equipment_textures[id] = load(tex_path)
-    scenes = [{"name":"Aménagement A","notes":"","objects":[]},{"name":"Aménagement B","notes":"","objects":[]}]
+    scenes = [
+        {"name":"Exemple à modifier","notes":"Proposition pédagogique de mobilier ; le plan original ne contient pas d’implantation définitive.","objects":[
+            {"uid":1,"type":"frigo","x":835.0,"y":274.0,"rot":0.0},
+            {"uid":2,"type":"etagere","x":850.0,"y":346.0,"rot":0.0},
+            {"uid":3,"type":"evier","x":927.0,"y":322.0,"rot":0.0},
+            {"uid":4,"type":"table","x":861.0,"y":455.0,"rot":0.0},
+            {"uid":5,"type":"cuisson","x":1125.0,"y":426.0,"rot":0.0},
+            {"uid":6,"type":"sauteuse","x":1110.0,"y":490.0,"rot":0.0},
+            {"uid":7,"type":"plonge","x":1030.0,"y":490.0,"rot":0.0},
+            {"uid":8,"type":"chariot","x":965.0,"y":520.0,"rot":0.0},
+            {"uid":9,"type":"four","x":1133.0,"y":530.0,"rot":0.0}
+        ]},
+        {"name":"Plan vierge","notes":"Départ sans mobilier : construisez votre propre scénario.","objects":[]}
+    ]
     camera = Camera2D.new()
     camera.name = "CameraJeu"
     add_child(camera)
@@ -174,172 +206,210 @@ func _build_ui() -> void:
 
     var top := PanelContainer.new()
     top.name = "BarrePrincipale"
-    top.add_theme_stylebox_override("panel",_panel(PAPER))
+    top.add_theme_stylebox_override("panel",_panel(Color("#FFF9F0")))
     top.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
-    top.offset_bottom = 72
+    top.offset_bottom = 58
+    top.clip_contents = true
     ui_root.add_child(top)
     var head := HBoxContainer.new()
-    head.add_theme_constant_override("separation",9)
+    head.add_theme_constant_override("separation",7)
     top.add_child(head)
-    var title := _label("ERGOLAB  •  CUISINE SCOLAIRE",17,INK)
-    title.custom_minimum_size.x = 305
+    var title := _label("ERGOLAB  /  CUISINE SCOLAIRE",15,INK)
+    title.custom_minimum_size.x = 250
     title.autowrap_mode = TextServer.AUTOWRAP_OFF
     head.add_child(title)
+    var material_button := _button("☰ Matériel",_toggle_palette)
+    material_button.custom_minimum_size.x = 104
+    head.add_child(material_button)
     name_input = LineEdit.new()
-    name_input.placeholder_text = "Ton pseudonyme"
+    name_input.placeholder_text = "Pseudonyme"
     name_input.text = "Participant"
-    name_input.custom_minimum_size = Vector2(140,38)
+    name_input.custom_minimum_size = Vector2(112,35)
     name_input.add_theme_color_override("font_color",INK)
     name_input.add_theme_stylebox_override("normal",_panel(PAPER))
+    name_input.size_flags_vertical = Control.SIZE_SHRINK_CENTER
     head.add_child(name_input)
-    color_button = _button("● Couleur",_cycle_color)
-    color_button.custom_minimum_size.x = 86
+    color_button = _button("●",_cycle_color)
+    color_button.tooltip_text = "Changer la couleur de ton avatar"
+    color_button.custom_minimum_size.x = 37
     head.add_child(color_button)
-    head.add_child(_button("Créer une salle",_new_room,true))
+    head.add_child(_button("+ Salle",_new_room,true))
     room_input = LineEdit.new()
     room_input.placeholder_text = "Code de salle"
-    room_input.custom_minimum_size = Vector2(135,38)
+    room_input.custom_minimum_size = Vector2(111,35)
     room_input.add_theme_color_override("font_color",INK)
     room_input.add_theme_stylebox_override("normal",_panel(PAPER))
+    room_input.size_flags_vertical = Control.SIZE_SHRINK_CENTER
     head.add_child(room_input)
-    head.add_child(_button("Rejoindre",_join_room))
-    head.add_child(_button("Lien",_copy_link))
+    head.add_child(_button("Entrer",_join_room))
+    head.add_child(_button("Inviter",_copy_link))
     var grow := Control.new()
     grow.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     head.add_child(grow)
-    role_label = _label("LOCAL",12,GREEN)
-    role_label.custom_minimum_size.x = 115
+    role_label = _label("HORS LIGNE",11,GREEN)
+    role_label.custom_minimum_size.x = 88
     role_label.autowrap_mode = TextServer.AUTOWRAP_OFF
     role_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
     head.add_child(role_label)
 
-    var left := PanelContainer.new()
-    left.name = "PaletteEquipements"
-    left.add_theme_stylebox_override("panel",_panel(PAPER))
-    left.position = Vector2(10,84)
-    left.size = Vector2(211,690)
-    ui_root.add_child(left)
-    var ls := ScrollContainer.new()
-    ls.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-    ls.size_flags_vertical = Control.SIZE_EXPAND_FILL
-    left.add_child(ls)
+    palette_panel = PanelContainer.new()
+    palette_panel.name = "PaletteEquipements"
+    palette_panel.add_theme_stylebox_override("panel",_panel(Color("#FFF9F0")))
+    palette_panel.position = Vector2(13,73)
+    palette_panel.size = Vector2(196,570)
+    ui_root.add_child(palette_panel)
+    var scroll := ScrollContainer.new()
+    scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+    scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+    palette_panel.add_child(scroll)
     var palette := VBoxContainer.new()
-    palette.custom_minimum_size.x = 183
-    palette.add_theme_constant_override("separation",5)
-    ls.add_child(palette)
-    palette.add_child(_label("MATÉRIEL À PLACER",14,ORANGE))
-    palette.add_child(_label("Objets du dossier, page 6",11,MUTED))
-    palette.add_child(_space(8))
-    var group: String = ""
+    palette.custom_minimum_size.x = 170
+    palette.add_theme_constant_override("separation",4)
+    scroll.add_child(palette)
+    palette.add_child(_label("ÉQUIPEMENTS",14,ORANGE))
+    palette.add_child(_label("Clique pour ajouter · Glisse pour déplacer",10,MUTED))
+    var last_category := ""
     for entry in CATALOG:
-        var typ: String = str(entry["kind"])
-        if group != typ:
-            group = typ
-            palette.add_child(_space(6))
-            palette.add_child(_label(group.to_upper(),10,MUTED))
-        var eq_id: String = str(entry["id"])
-        palette.add_child(_button("+  " + str(entry["label"]),func(): _spawn_equipment(eq_id)))
+        var category: String = str(entry["kind"])
+        if last_category != category:
+            last_category = category
+            palette.add_child(_space(7))
+            palette.add_child(_label(category.to_upper(),10,MUTED))
+        var equipment_id: String = str(entry["id"])
+        palette.add_child(_button("+  " + str(entry["label"]),func(): _spawn_equipment(equipment_id)))
     palette.add_child(_space(10))
-    palette.add_child(_label("SOURIS",10,MUTED))
-    palette.add_child(_label("Clic au sol : avancer\nGlisser : placer le mobilier\nMolette : zoomer",11,MUTED))
+    palette.add_child(_label("R : rotation · Suppr : retirer",10,MUTED))
 
-    var right := PanelContainer.new()
-    right.name = "AtelierJeu"
-    right.add_theme_stylebox_override("panel",_panel(PAPER))
-    ui_root.add_child(right)
-    right.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
-    right.position = Vector2(-251,84)
-    right.size = Vector2(241,690)
-    var rs := ScrollContainer.new()
-    rs.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-    right.add_child(rs)
-    var actions := VBoxContainer.new()
-    actions.custom_minimum_size.x = 212
-    actions.add_theme_constant_override("separation",8)
-    rs.add_child(actions)
-    actions.add_child(_label("BAC À SABLE",15,ORANGE))
-    actions.add_child(_label("Déplace-toi. Essaie des tâches. Observe les trajets.",12,MUTED))
-    action_menu = OptionButton.new()
-    for index in ACTIONS.size():
-        action_menu.add_item(str(ACTIONS[index]).capitalize(),index)
-    actions.add_child(action_menu)
-    actions.add_child(_button("AGIR  ·  E",_perform_action,true))
-    actions.add_child(_button("Arrêter l'action",func(): _set_action("libre",-1)))
-    actions.add_child(_space(4))
-    actions.add_child(_label("SCÉNARIO",12,ORANGE))
+    stage_panel = PanelContainer.new()
+    stage_panel.name = "CarteAtelier"
+    stage_panel.add_theme_stylebox_override("panel",_panel(Color("#FFF9F0")))
+    stage_panel.size = Vector2(208,336)
+    ui_root.add_child(stage_panel)
+    var controls := VBoxContainer.new()
+    controls.add_theme_constant_override("separation",5)
+    stage_panel.add_child(controls)
+    controls.add_child(_label("AMÉNAGEMENT",12,ORANGE))
     scenario_picker = OptionButton.new()
     scenario_picker.item_selected.connect(_select_scenario)
-    actions.add_child(scenario_picker)
+    controls.add_child(scenario_picker)
     scenario_title = LineEdit.new()
     scenario_title.placeholder_text = "Nom de l'aménagement"
     scenario_title.add_theme_color_override("font_color",INK)
     scenario_title.add_theme_stylebox_override("normal",_panel(PAPER))
     scenario_title.text_submitted.connect(func(_v): _rename_scenario())
-    actions.add_child(scenario_title)
-    actions.add_child(_button("Renommer",_rename_scenario))
-    actions.add_child(_button("Dupliquer",_duplicate_scenario))
-    actions.add_child(_button("Tourner le meuble  ·  R",_rotate_selection))
-    actions.add_child(_button("Retirer le meuble  ·  Suppr",_remove_selection))
-    actions.add_child(_space(4))
-    actions.add_child(_label("ANIMATION",12,ORANGE))
-    pause_button = _button("Mettre en pause",_toggle_pause)
-    actions.add_child(pause_button)
-    lock_button = _button("Verrouiller les meubles",_toggle_lock)
-    actions.add_child(lock_button)
-    actions.add_child(_button("Réinitialiser la vue",_reset_camera))
-    actions.add_child(_button("Afficher / cacher grille",func(): show_grid = not show_grid; queue_redraw()))
-    actions.add_child(_button("Afficher / cacher trajets",func(): show_paths = not show_paths; queue_redraw()))
-    actions.add_child(_space(4))
-    actions.add_child(_label("OBSERVATION ERGONOMIQUE",12,ORANGE))
+    controls.add_child(scenario_title)
+    var scenario_buttons := HBoxContainer.new()
+    controls.add_child(scenario_buttons)
+    scenario_buttons.add_child(_button("Renommer",_rename_scenario))
+    scenario_buttons.add_child(_button("Dupliquer",_duplicate_scenario))
+    controls.add_child(_space(3))
+    controls.add_child(_label("VUE",11,ORANGE))
+    var view_buttons := HBoxContainer.new()
+    controls.add_child(view_buttons)
+    view_buttons.add_child(_button("Cuisine",_focus_kitchen))
+    view_buttons.add_child(_button("Plan entier",_focus_all))
+    var overlay_buttons := HBoxContainer.new()
+    controls.add_child(overlay_buttons)
+    overlay_buttons.add_child(_button("F2 : Plan",_toggle_blueprint))
+    overlay_buttons.add_child(_button("Grille",_toggle_grid))
+    controls.add_child(_space(3))
+    pause_button = _button("Pause",_toggle_pause)
+    lock_button = _button("Verrouiller",_toggle_lock)
+    var facilitator := HBoxContainer.new()
+    controls.add_child(facilitator)
+    facilitator.add_child(pause_button)
+    facilitator.add_child(lock_button)
+    controls.add_child(_label("OBSERVATION",11,ORANGE))
     obs_line = LineEdit.new()
-    obs_line.placeholder_text = "Ex. Passage encombré"
-    actions.add_child(obs_line)
-    actions.add_child(_button("Noter (observation)",_add_observation))
-    people_label = _label("1 avatar local",11,MUTED)
-    actions.add_child(people_label)
+    obs_line.placeholder_text = "Ce qui gêne le travail…"
+    obs_line.add_theme_color_override("font_color",INK)
+    obs_line.add_theme_stylebox_override("normal",_panel(PAPER))
+    obs_line.text_submitted.connect(func(_v): _add_observation())
+    controls.add_child(obs_line)
+    controls.add_child(_button("Noter le problème",_add_observation))
+    people_label = _label("1 participant",10,MUTED)
+    controls.add_child(people_label)
+
+    var prompt_frame := PanelContainer.new()
+    prompt_frame.name = "InvitationAction"
+    prompt_frame.add_theme_stylebox_override("panel",_panel(Color("#173A44")))
+    prompt_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    ui_root.add_child(prompt_frame)
+    hint_label = _label("ZQSD / flèches : marcher     ·     E : utiliser un poste",12,Color.WHITE)
+    hint_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    prompt_frame.add_child(hint_label)
 
     var bottom := PanelContainer.new()
+    bottom.name = "BarreÉtat"
     bottom.add_theme_stylebox_override("panel",_panel(DARK))
     bottom.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
-    bottom.offset_top = -45
+    bottom.offset_top = -44
     ui_root.add_child(bottom)
     var bottom_bar := HBoxContainer.new()
     bottom.add_child(bottom_bar)
-    connect_status = _label("",12,Color.WHITE)
+    connect_status = _label("",11,Color.WHITE)
     connect_status.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     bottom_bar.add_child(connect_status)
-    mini_status = _label("",12,Color("#E8CFB4"))
-    mini_status.custom_minimum_size.x = 290
+    mini_status = _label("",11,Color("#DCE6DD"))
+    mini_status.custom_minimum_size.x = 210
     mini_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
     bottom_bar.add_child(mini_status)
     _refresh_scenarios()
 
+func _toggle_palette() -> void:
+    palette_open = not palette_open
+    palette_panel.visible = palette_open
+
+func _toggle_grid() -> void:
+    show_grid = not show_grid
+    queue_redraw()
+
+func _toggle_blueprint() -> void:
+    show_blueprint = not show_blueprint
+    queue_redraw()
+
+func _focus_kitchen() -> void:
+    camera.position = Vector2(915,443)
+    var s: Vector2 = get_viewport_rect().size
+    var z: float = clampf(minf((s.y-120.0)/690.0,(s.x-370.0)/670.0),0.56,1.45)
+    camera.zoom = Vector2.ONE*z
+    zoom_override = z
+    queue_redraw()
+
+func _focus_all() -> void:
+    camera.position = Vector2(786,542)
+    var s: Vector2 = get_viewport_rect().size
+    var z: float = clampf(minf((s.x-35.0)/1610.0,(s.y-100.0)/1100.0),0.35,1.1)
+    camera.zoom = Vector2.ONE*z
+    zoom_override = z
+    queue_redraw()
+
 func _resize() -> void:
     if camera == null or ui_root == null:
         return
-    var s: Vector2 = get_viewport_rect().size
-    ui_root.size = s
-    var left: Control = ui_root.get_node("PaletteEquipements")
-    var right: Control = ui_root.get_node("AtelierJeu")
-    left.position = Vector2(10,84)
-    left.size = Vector2(211,maxf(300,s.y-141))
-    right.position = Vector2(s.x-251,84)
-    right.size = Vector2(241,maxf(300,s.y-141))
-    var field_w := maxf(260,s.x-211-241-36)
-    var field_h := maxf(220,s.y-72-45-30)
-    view_scale = minf(field_w/840.0, field_h/800.0)
-    camera.zoom = Vector2.ONE*clampf(view_scale*zoom_override,0.28,2.8)
-    var canvas_offset_x := ((211.0-241.0)*0.5)/camera.zoom.x
-    camera.position = Vector2(957.0 - canvas_offset_x, 445.0)
+    var screen: Vector2 = get_viewport_rect().size
+    ui_root.size = screen
+    palette_panel.position = Vector2(12,72)
+    palette_panel.size = Vector2(196,minf(580.0,maxf(230.0,screen.y-143.0)))
+    palette_panel.visible = palette_open and screen.x>790.0
+    stage_panel.position = Vector2(screen.x-223.0,72)
+    stage_panel.size = Vector2(210,minf(425.0,maxf(240.0,screen.y-147.0)))
+    stage_panel.visible = screen.x>900.0
+    var action_card: Control = ui_root.get_node("InvitationAction")
+    action_card.size = Vector2(minf(400.0,screen.x*0.44),47)
+    action_card.position = Vector2(screen.x*0.5-action_card.size.x*0.5,screen.y-104.0)
+    if not viewport_initialized:
+        viewport_initialized = true
+        _focus_kitchen()
     queue_redraw()
 
 func _reset_camera() -> void:
-    zoom_override = 1.0
-    _resize()
+    _focus_kitchen()
 
 func _cycle_color() -> void:
     color_index = (color_index+1)%AVATAR_COLORS.size()
-    color_button.text = "● Couleur " + str(color_index+1)
+    color_button.text = "●"
+    color_button.add_theme_color_override("font_color",Color(AVATAR_COLORS[color_index]))
     if not network.has_room():
         local_avatar["color"] = AVATAR_COLORS[color_index]
         queue_redraw()
@@ -414,7 +484,11 @@ func _inside_kitchen(p: Vector2) -> bool:
 func _collision(p: Vector2) -> bool:
     if not _inside_kitchen(p):
         return true
+    var own: Dictionary = _my_avatar()
+    var pushing_target: int = int(own.get("target",-1)) if str(own.get("action","libre"))=="pousser" else -1
     for obj in _objects():
+        if int(obj.get("uid",-2))==pushing_target:
+            continue
         var center := Vector2(float(obj.get("x",0)),float(obj.get("y",0)))
         var dims: Vector2 = equipment_sizes.get(str(obj.get("type","")),Vector2(40,50))
         var relative: Vector2 = (p-center).rotated(-deg_to_rad(float(obj.get("rot",0))))
@@ -431,46 +505,73 @@ func _collision(p: Vector2) -> bool:
 func _process(delta: float) -> void:
     if ui_root == null:
         return
+    animation_clock += delta
     var focused: Control = get_viewport().gui_get_focus_owner()
     var typing: bool = focused is LineEdit or focused is TextEdit
-    var a: Dictionary = _my_avatar()
+    var avatar: Dictionary = _my_avatar()
     var speed := 135.0
-    if str(a.get("action","libre"))=="porter": speed=88.0
-    if str(a.get("action","libre"))=="pousser": speed=72.0
+    if str(avatar.get("action","libre"))=="porter":speed=92.0
+    if str(avatar.get("action","libre"))=="pousser":speed=76.0
     var direction := Vector2.ZERO
-    if Input.is_key_pressed(KEY_A) or Input.is_key_pressed(KEY_Q) or Input.is_key_pressed(KEY_LEFT):direction.x-=1
-    if Input.is_key_pressed(KEY_D) or Input.is_key_pressed(KEY_RIGHT):direction.x+=1
-    if Input.is_key_pressed(KEY_W) or Input.is_key_pressed(KEY_Z) or Input.is_key_pressed(KEY_UP):direction.y-=1
-    if Input.is_key_pressed(KEY_S) or Input.is_key_pressed(KEY_DOWN):direction.y+=1
-    if typing:
-        direction=Vector2.ZERO
+    if not typing:
+        if Input.is_key_pressed(KEY_A) or Input.is_key_pressed(KEY_Q) or Input.is_key_pressed(KEY_LEFT):direction.x-=1.0
+        if Input.is_key_pressed(KEY_D) or Input.is_key_pressed(KEY_RIGHT):direction.x+=1.0
+        if Input.is_key_pressed(KEY_W) or Input.is_key_pressed(KEY_Z) or Input.is_key_pressed(KEY_UP):direction.y-=1.0
+        if Input.is_key_pressed(KEY_S) or Input.is_key_pressed(KEY_DOWN):direction.y+=1.0
+    else:
         has_waypoint=false
     if not direction.is_zero_approx():
         has_waypoint=false
         direction=direction.normalized()
     elif has_waypoint:
-        var distance := _my_pos().distance_to(waypoint)
-        if distance<8.0:
+        if _my_pos().distance_to(waypoint)<9.0:
             has_waypoint=false
         else:
-            direction=(_my_pos().direction_to(waypoint))
+            direction=_my_pos().direction_to(waypoint)
+    walking = false
     if not direction.is_zero_approx() and not paused and (not network.has_room() or network.connected):
-        var origin := _my_pos()
-        var target := origin+direction*speed*delta
+        direction_facing = direction
+        var origin: Vector2 = _my_pos()
+        var target: Vector2 = origin+direction*speed*delta
         if not _collision(target):
+            if not network.has_room() and str(avatar.get("action","libre"))=="pousser":
+                var pushed_uid: int=int(avatar.get("target",-1))
+                for obj in _objects():
+                    if int(obj.get("uid",-2))==pushed_uid and str(obj.get("type",""))=="chariot":
+                        var cart_next: Vector2=Vector2(float(obj.get("x",0)),float(obj.get("y",0)))+(target-origin)
+                        if _inside_kitchen(cart_next):
+                            obj["x"]=cart_next.x
+                            obj["y"]=cart_next.y
+                            if int(animation_clock*2.0)!=int((animation_clock-delta)*2.0):
+                                _save_local_scenes()
+                        break
             _me_update(target)
+            walking=true
             move_elapsed+=delta
-            if network.has_room() and move_elapsed>0.17:
+            if network.has_room() and move_elapsed>0.15:
                 move_elapsed=0.0
                 network.send_move(target.x,target.y)
         else:
             has_waypoint=false
     status_elapsed+=delta
-    if status_elapsed>=0.25:
+    if status_elapsed>=0.17:
         status_elapsed=0.0
+        var near_id: int = _nearest_equipment(115.0)
+        if hint_label:
+            var current_action: String = str(_my_avatar().get("action","libre"))
+            if current_action!="libre":
+                hint_label.text="ACTIVITÉ : " + current_action.to_upper()+"   ·   E pour terminer"
+            elif near_id>=0:
+                var nearest_name: String = "poste"
+                for obj in _objects():
+                    if int(obj.get("uid",-1))==near_id:
+                        nearest_name=str(equipment_labels.get(str(obj.get("type","")),"poste"))
+                        break
+                hint_label.text="E  ·  Utiliser : " + nearest_name + "    |    R : tourner l'objet"
+            else:
+                hint_label.text="ZQSD / FLÈCHES pour marcher  ·  CLIC pour avancer  ·  E pour agir"
         if mini_status:
-            var eq := _nearest_equipment(145.0)
-            mini_status.text = "%d agent(s)  ·  %.1f m parcourus%s" % [maxi(1,participants.size()),local_distance,"  ·  poste proche" if eq>=0 else ""]
+            mini_status.text = "%d agents    •    %.1f m" % [maxi(1,participants.size()),local_distance]
     queue_redraw()
 
 func _nearest_equipment(radius: float) -> int:
@@ -517,12 +618,31 @@ func _set_action(action: String,target: int) -> void:
     queue_redraw()
 
 func _perform_action() -> void:
-    var action: String = ACTIONS[action_menu.selected]
-    var nearest := _action_target(action)
-    if nearest<0 and action not in ["libre","attendre","livrer"]:
-        _status("Approche-toi d'un poste avant d'effectuer cette action.")
+    if paused:
+        _status("Simulation en pause")
         return
-    _set_action(action,nearest)
+    var avatar: Dictionary = _my_avatar()
+    if str(avatar.get("action","libre")) != "libre":
+        _set_action("libre",-1)
+        return
+    var obj_idx: int = _nearest_equipment(115.0)
+    if obj_idx < 0:
+        _status("Approche-toi d'un équipement pour interagir.")
+        return
+    var obj: Dictionary = {}
+    for item in _objects():
+        if int(item.get("uid",-1))==obj_idx:
+            obj = item
+            break
+    var equipment_type: String = str(obj.get("type",""))
+    var action: String = "préparer"
+    if equipment_type=="chariot":action="pousser"
+    elif equipment_type in ["cuisson","sauteuse","marmite","four","friteuse"]:action="cuisiner"
+    elif equipment_type in ["plonge","lave_mains"]:action="plonge"
+    elif equipment_type in ["meuble_chaud"]:action="servir"
+    elif equipment_type=="etagere":action="porter"
+    elif equipment_type in ["evier"]:action="préparer"
+    _set_action(action,obj_idx)
 
 func _spawn_equipment(kind: String) -> void:
     if locked and network.has_room() and network.role!="host":
@@ -642,97 +762,233 @@ func _post_observation(txt: String) -> void:
     req.request(network.server_origin+"/api/workshop",PackedStringArray(["Content-Type: application/json"]),HTTPClient.METHOD_POST,JSON.stringify(body))
 
 func _draw() -> void:
-    draw_rect(Rect2(-300,-300,2400,1700),Color("#E8E7E1"))
-    draw_texture_rect(MAP,Rect2(0,0,1571,1088),false,Color(1,1,1,0.9))
-    draw_colored_polygon(walk_poly,Color(0.79,0.91,0.82,0.22))
-    draw_polyline(walk_poly,Color(0.22,0.50,0.40,0.75),3.2,true)
-    draw_line(walk_poly[walk_poly.size()-1],walk_poly[0],Color(0.22,0.50,0.40,0.75),3.2,true)
-    if show_grid:
-        for x in range(0,39):
-            draw_line(Vector2(float(x)*SCALE_PX_PER_M,50),Vector2(float(x)*SCALE_PX_PER_M,1050),Color(0.14,0.34,0.35,0.075),1.0)
-        for y in range(0,28):
-            draw_line(Vector2(45,float(y)*SCALE_PX_PER_M),Vector2(1490,float(y)*SCALE_PX_PER_M),Color(0.14,0.34,0.35,0.075),1.0)
-    for o in _objects():_draw_equipment(o)
+    # La référence architecturale est un calque facultatif, PAS le décor du jeu.
+    draw_rect(Rect2(-350,-320,2450,1850),Color("#C6D3C1"))
+    # Cour, trotir et boulevard : repères du site, sans objets fictifs.
+    draw_rect(Rect2(-80,65,740,1020),Color("#DCE6D2"))
+    draw_colored_polygon(PackedVector2Array([Vector2(1293,-180),Vector2(1710,-180),Vector2(2030,1150),Vector2(1550,1150)]),Color("#78898B"))
+    draw_colored_polygon(PackedVector2Array([Vector2(1230,-180),Vector2(1293,-180),Vector2(1550,1150),Vector2(1475,1150)]),Color("#D2CCB9"))
+    for v in range(-2,12):
+        var t: float = float(v)*150.0
+        draw_line(Vector2(1490+t*0.22,t-150),Vector2(1520+t*0.22,t-96),Color(1,1,1,0.48),3.0)
+
+    # Les réfectoires restent libres, comme sur le plan de projet non aménagé.
+    _paint_floor(floor_mother,Color("#E9DCC4"),Color("#D4C09F"),"RÉFECTOIRE",Vector2(360,432),"MATERNELLE")
+    _paint_floor(floor_primary,Color("#E9DCC4"),Color("#D4C09F"),"RÉFECTOIRE",Vector2(670,837),"ÉLÉMENTAIRE")
+    _paint_floor(walk_poly,Color("#EBF0E8"),Color("#CBD9D0"),"CUISINE",Vector2(977,328),"ESPACE DE TRAVAIL")
+    # Deux seuils de liaison. Le contour reste à confirmer sur un plan coté.
+    _draw_door(Vector2(630,383),-0.44)
+    _draw_door(Vector2(913,607),-0.65)
+    if show_blueprint:
+        draw_texture_rect(MAP,Rect2(0,0,1571,1088),false,Color(1,1,1,0.64))
+        draw_string(ThemeDB.fallback_font,Vector2(814,140),"CALQUE ARCHITECTE · F2 POUR MASQUER",HORIZONTAL_ALIGNMENT_LEFT,-1,15,Color("#97623A"))
+    for o in _objects():
+        _draw_equipment(o)
     if network.has_room():
         for person in participants:
-            _draw_avatar(person)
+            if bool(person.get("connected",true)):
+                _draw_avatar(person)
     else:
         _draw_avatar({"id":"local","nickname":nickname if nickname!="" else "Moi","color":local_avatar.get("color",AVATAR_COLORS[color_index]),"avatar":local_avatar,"connected":true})
     if has_waypoint:
-        draw_arc(waypoint,10,0,TAU,22,Color("#315E68"),2.0,true)
-    # Indique sans ambiguïté le caractère approximatif des parois déduites de l'image.
-    draw_string(ThemeDB.fallback_font,Vector2(775,80),"Contours de circulation à vérifier sur plan coté",HORIZONTAL_ALIGNMENT_LEFT,-1,15,Color("#B06939"))
+        draw_arc(waypoint,10.0,0,TAU,28,Color("#D8804A"),2.6,true)
+        draw_circle(waypoint,3.0,Color("#D8804A"))
+
+func _paint_floor(poly: PackedVector2Array, base: Color, grout: Color, title: String, caption_at: Vector2, subtitle: String) -> void:
+    draw_colored_polygon(poly,Color(0.10,0.19,0.18,0.18))
+    draw_colored_polygon(poly,base)
+    # Dalles en vue de dessus, sans grilles techniques rouges.
+    var aabb: Rect2 = _poly_bounds(poly)
+    var gap: float = 34.0 if title=="CUISINE" else 49.0
+    var yy: float = floorf(aabb.position.y/gap)*gap
+    while yy<aabb.end.y:
+        var xx: float = floorf(aabb.position.x/gap)*gap
+        while xx<aabb.end.x:
+            var center: Vector2=Vector2(xx+gap*0.5,yy+gap*0.5)
+            if Geometry2D.is_point_in_polygon(center,poly):
+                var t: Rect2=Rect2(xx+2,yy+2,gap-4,gap-4)
+                draw_rect(t,Color(base.r+0.018,base.g+0.018,base.b+0.018,0.75))
+                draw_line(Vector2(xx+2,yy+gap-2),Vector2(xx+gap-2,yy+gap-2),Color(grout.r,grout.g,grout.b,0.40),1.0)
+            xx += gap
+        yy += gap
+    # Murs physiques visibles : deux traits, une ombre et une plinthe.
+    var count: int=poly.size()
+    for k in range(count):
+        var a: Vector2=poly[k]
+        var b: Vector2=poly[(k+1)%count]
+        draw_line(a+Vector2(3,5),b+Vector2(3,5),Color(0.12,0.17,0.17,0.18),19.0,true)
+        draw_line(a,b,Color("#526B68"),17.0,true)
+        draw_line(a,b,Color("#FFFDF6"),10.0,true)
+        draw_line(a,b,Color("#A3B7AA"),1.7,true)
+    var name_color: Color=Color("#6B8C83") if title=="CUISINE" else Color("#AD9275")
+    draw_string(ThemeDB.fallback_font,caption_at,title,HORIZONTAL_ALIGNMENT_CENTER,-1,27,name_color)
+    draw_string(ThemeDB.fallback_font,caption_at+Vector2(0,23),subtitle,HORIZONTAL_ALIGNMENT_CENTER,-1,13,Color(name_color.r,name_color.g,name_color.b,0.85))
+
+func _poly_bounds(poly: PackedVector2Array) -> Rect2:
+    var result: Rect2=Rect2(poly[0],Vector2.ZERO)
+    for point in poly:
+        result=result.expand(point)
+    return result
+
+func _draw_door(place: Vector2, angle: float) -> void:
+    # Ouverture explicite sur les parois représentées. Position à confirmer.
+    draw_set_transform(place,angle)
+    draw_rect(Rect2(-24,-13,48,26),Color("#EBF0E8"))
+    draw_line(Vector2(-22,8),Vector2(22,8),Color("#BBAD94"),2.4)
+    draw_arc(Vector2(-22,9),40.0,-PI*0.49,0.0,18,Color("#BAA888"),1.7,true)
+    draw_line(Vector2(-22,9),Vector2(-22,-30),Color("#B8A78D"),3.0,true)
+    draw_set_transform(Vector2.ZERO)
 
 func _draw_equipment(o: Dictionary) -> void:
-    var id: String=str(o.get("type",""))
-    var size2: Vector2=equipment_sizes.get(id,Vector2(35,40))
-    var pos:=Vector2(float(o.get("x",0)),float(o.get("y",0)))
-    var angle:=deg_to_rad(float(o.get("rot",0)))
-    draw_set_transform(pos,angle)
-    var rect:=Rect2(-size2*0.5,size2)
-    draw_rect(rect.grow(5),Color(1,1,1,0.89))
-    if equipment_textures.has(id):
-        draw_texture_rect(equipment_textures[id],rect,false)
-    else:
-        draw_rect(rect,Color("#B5C9CA"))
-    draw_rect(rect,Color("#687E80"),false,1.8)
+    var id: String = str(o.get("type",""))
+    var dimensions: Vector2 = equipment_sizes.get(id,Vector2(39,53))
+    var center: Vector2 = Vector2(float(o.get("x",0)),float(o.get("y",0)))
+    var angle: float = deg_to_rad(float(o.get("rot",0)))
+    var extent: Vector2 = dimensions*0.5
+    draw_set_transform(center,angle)
+    var tile: Rect2 = Rect2(-extent,dimensions)
+    draw_rect(tile.grow(5).translated(Vector2(3,4)),Color(0.09,0.15,0.17,0.22))
+    # Équipements illustrés directement par Godot, avec des attributs reconnaissables.
+    var metal: Color=Color("#D6E0DC")
+    var edge: Color=Color("#708E90")
+    if id in ["table","etagere","meuble_chaud"]:
+        metal=Color("#D4E4E1") if id=="table" else Color("#CABAA2") if id=="etagere" else Color("#D6BFA7")
+    if id in ["cuisson","sauteuse","marmite","four","friteuse"]:
+        metal=Color("#B6C6CC")
+    draw_rect(tile,metal)
+    draw_rect(tile,edge,false,2.0)
+    draw_line(tile.position+Vector2(4,5),tile.position+Vector2(tile.size.x-4,5),Color(1,1,1,0.60),2.0)
+    var iw: float=extent.x
+    var ih: float=extent.y
+    match id:
+        "chariot":
+            draw_rect(Rect2(-iw+4,-ih+4,dimensions.x-8,dimensions.y-8),Color("#9FC1C5"))
+            for x in [-iw+2,iw-2]:
+                for y in [-ih+2,ih-2]:draw_circle(Vector2(x,y),3.5,Color("#354D54"))
+            draw_line(Vector2(-iw-4,-ih),Vector2(-iw-4,ih),Color("#7C8F94"),3.0)
+        "table":
+            draw_rect(Rect2(-iw+5,-ih+8,dimensions.x-10,dimensions.y-16),Color("#C2D0CB"))
+            draw_rect(Rect2(-iw+6,-ih+10,dimensions.x-12,minf(24.0,ih*0.7)),Color("#CBAC78"))
+            draw_line(Vector2(-iw+9,0),Vector2(iw-9,0),Color(1,1,1,0.62),2.0)
+        "frigo":
+            draw_rect(Rect2(-iw+4,-ih+4,dimensions.x-8,dimensions.y-8),Color("#F4F6EE"))
+            draw_line(Vector2(-iw+2,0),Vector2(iw-2,0),Color("#80989B"),2.2)
+            draw_rect(Rect2(iw-8,-ih*0.7,3,ih*0.5),Color("#526D70"))
+            draw_rect(Rect2(iw-8,ih*0.12,3,ih*0.42),Color("#526D70"))
+        "etagere":
+            for yy in range(1,4):
+                var bar_y: float=-ih+yy*dimensions.y/4.0
+                draw_line(Vector2(-iw+3,bar_y),Vector2(iw-3,bar_y),Color("#92785C"),4.0)
+        "evier", "plonge", "lave_mains":
+            var basins: int=3 if id=="plonge" else 2 if id=="evier" else 1
+            for j in range(basins):
+                var yy: float=-ih+float(j+0.5)*dimensions.y/float(basins)
+                var r: float=minf(iw-4.0,dimensions.y/float(basins)*0.38)
+                draw_circle(Vector2(0,yy),maxf(4.0,r),Color("#88B5C1"))
+                draw_arc(Vector2(0,yy),maxf(4.0,r),0.0,TAU,18,Color("#5A8190"),2.0,true)
+                draw_circle(Vector2(0,yy),2.1,Color("#E4F0ED"))
+        "cuisson", "sauteuse", "marmite", "four", "friteuse":
+            if id=="four":
+                draw_rect(Rect2(-iw+6,-ih+7,dimensions.x-12,dimensions.y-14),Color("#445D68"))
+                for y in range(-2,3):
+                    draw_line(Vector2(-iw+10,float(y)*5),Vector2(iw-10,float(y)*5),Color("#D9E3DB"),1.5)
+            elif id=="friteuse":
+                for xx in [-iw*0.5,iw*0.5]:
+                    draw_rect(Rect2(xx-6,-ih+8,12,dimensions.y-16),Color("#566F7B"))
+                    draw_line(Vector2(xx-5,0),Vector2(xx+5,0),Color("#E8B870"),2.0)
+            else:
+                for xx in [-iw*0.52,iw*0.52]:
+                    var rr: float=minf(7.0,ih*0.44)
+                    draw_circle(Vector2(xx,0),rr,Color("#566C75"))
+                    draw_arc(Vector2(xx,0),rr-2.0,0.0,TAU,18,Color("#D4E1DB"),2.0,true)
+                    draw_circle(Vector2(xx,0),2.0,Color("#DA9B65"))
+        "meuble_chaud":
+            for yy in [-ih*0.52,0.0,ih*0.52]:
+                draw_line(Vector2(-iw+5,yy),Vector2(iw-5,yy),Color("#886F5D"),2.5)
+        "eplucheuse":
+            draw_circle(Vector2(0,0),minf(iw,ih)*0.70,Color("#708D94"))
+            draw_circle(Vector2(0,0),minf(iw,ih)*0.37,Color("#B8C8CB"))
     if int(o.get("uid",-1))==selected_uid:
-        draw_rect(rect.grow(8),ORANGE,false,3.5)
+        draw_rect(tile.grow(9),Color("#E08048"),false,3.0)
+        draw_circle(Vector2(iw+9,-ih-7),4.0,Color("#E08048"))
     draw_set_transform(Vector2.ZERO)
 
 func _draw_avatar(person: Dictionary) -> void:
     var av: Dictionary=person.get("avatar",{})
-    var pos:=Vector2(float(av.get("x",981)),float(av.get("y",439)))
-    var color:=Color(str(person.get("color",AVATAR_COLORS[0])))
-    var name: String=str(person.get("nickname","Agent"))
+    var pos: Vector2=Vector2(float(av.get("x",981)),float(av.get("y",439)))
+    var tint: Color=Color(str(person.get("color",AVATAR_COLORS[0])))
+    var label: String=str(person.get("nickname","Agent"))
+    var mine: bool = (str(person.get("id",""))==network.peer_id) if network.has_room() else true
+    var action: String=str(av.get("action","libre"))
     if show_paths:
         var trail: Array=av.get("trail",[])
-        for j in range(1,trail.size()):
-            var a1: Array=trail[j-1]
-            var a2: Array=trail[j]
-            draw_line(Vector2(float(a1[0]),float(a1[1])),Vector2(float(a2[0]),float(a2[1])),Color(color.r,color.g,color.b,0.43),2.7,true)
-    var bob: float=sin(float(Time.get_ticks_msec())*0.014)*1.7 if str(av.get("action","libre"))!="attendre" else 0.0
-    draw_circle(pos+Vector2(0,6),17,Color(0,0,0,0.17))
-    draw_circle(pos+Vector2(0,bob),14,color)
-    draw_arc(pos+Vector2(0,bob),14.0,0,TAU,30,Color.WHITE,2.7,true)
-    draw_circle(pos+Vector2(0,-5+bob),5,Color.WHITE)
-    draw_line(pos+Vector2(0,2+bob),pos+Vector2(0,9+bob),Color.WHITE,3.0,true)
-    var doing: String=str(av.get("action","libre"))
-    # L'action de l'agent se lit aussi dans le jeu, sans menus supplémentaires.
-    if doing=="porter" or doing=="livrer":
-        draw_rect(Rect2(pos+Vector2(-11,-29+bob),Vector2(22,12)),Color("#CB9154"))
-        draw_line(pos+Vector2(-9,-21+bob),pos+Vector2(9,-21+bob),Color("#704E39"),2)
-    elif doing=="cuisiner":
-        draw_circle(pos+Vector2(-15,-19+bob),5,Color("#F1A442"))
-        draw_circle(pos+Vector2(-12,-23+bob),3,Color("#E36B3D"))
-    elif doing=="plonge" or doing=="nettoyer":
-        draw_arc(pos+Vector2(17,-18+bob),7,0,TAU,16,Color("#53ABD0"),2,true)
-        draw_arc(pos+Vector2(21,-29+bob),4,0,TAU,12,Color("#53ABD0"),2,true)
-    elif doing=="pousser":
-        draw_line(pos+Vector2(8,-5+bob),pos+Vector2(24,-8+bob),Color.WHITE,3,true)
-    var is_mine: bool = (str(person.get("id","")) == network.peer_id) if network.has_room() else true
-    if is_mine:
-        draw_arc(pos,21,0,TAU,30,ORANGE,2.3,true)
-    draw_string(ThemeDB.fallback_font,pos+Vector2(19,-4),name,HORIZONTAL_ALIGNMENT_LEFT,-1,15,INK)
-    if doing!="libre":
-        draw_string(ThemeDB.fallback_font,pos+Vector2(19,12),doing,HORIZONTAL_ALIGNMENT_LEFT,-1,12,ORANGE)
+        for k in range(1,trail.size()):
+            var a: Array=trail[k-1]
+            var b: Array=trail[k]
+            draw_line(Vector2(float(a[0]),float(a[1])),Vector2(float(b[0]),float(b[1])),Color(tint.r,tint.g,tint.b,0.50),2.7,true)
+    var facing: Vector2=direction_facing if mine else Vector2.DOWN
+    if not mine:
+        var trace: Array=av.get("trail",[])
+        if trace.size()>1:
+            var tail: Array=trace[trace.size()-1]
+            var before: Array=trace[trace.size()-2]
+            var diff: Vector2=Vector2(float(tail[0])-float(before[0]),float(tail[1])-float(before[1]))
+            if diff.length()>1.0:facing=diff.normalized()
+    var swing: float=sin(animation_clock*14.0)*5.0 if mine and walking else 0.0
+    draw_circle(pos+Vector2(3,10),19.0,Color(0,0,0,0.19))
+    draw_set_transform(pos,Vector2.DOWN.angle_to(facing))
+    # Silhouette d'agent vue de dessus, avec démarche et direction lisible.
+    draw_line(Vector2(-5,8),Vector2(-6,22+swing),Color("#3B5962"),7.0,true)
+    draw_line(Vector2(5,8),Vector2(6,22-swing),Color("#3B5962"),7.0,true)
+    draw_line(Vector2(-8,-3),Vector2(-17,10-swing*0.35),Color("#D5A57D"),6.0,true)
+    draw_line(Vector2(8,-3),Vector2(17,10+swing*0.35),Color("#D5A57D"),6.0,true)
+    draw_circle(Vector2(0,2),13.0,tint)
+    draw_rect(Rect2(-7,-2,14,17),Color("#F5E7CD"))
+    draw_line(Vector2(-7,13),Vector2(7,13),Color("#DDCBAC"),1.8)
+    draw_circle(Vector2(0,-9),9.0,Color("#E5B58C"))
+    # Couvre-chef et direction du regard.
+    draw_arc(Vector2(0,-11),9.0,PI,TAU,16,Color("#3D4A4C"),4.5,true)
+    draw_circle(Vector2(-3,-13),1.4,Color("#544136"))
+    draw_circle(Vector2(3,-13),1.4,Color("#544136"))
+    if action in ["porter","livrer"]:
+        draw_rect(Rect2(-11,-34,22,13),Color("#C58C50"))
+        draw_line(Vector2(-10,-28),Vector2(10,-28),Color("#72563F"),2.0)
+    elif action=="pousser":
+        draw_line(Vector2(-12,-23),Vector2(12,-23),Color("#476778"),4.0)
+    elif action=="cuisiner":
+        draw_circle(Vector2(15,-23),7.0,Color("#F3A84E"))
+        draw_circle(Vector2(17,-26),4.0,Color("#D87B42"))
+    elif action in ["plonge","nettoyer"]:
+        draw_arc(Vector2(15,-25),7.0,0.0,TAU,20,Color("#62B6CD"),2.6,true)
+    elif action in ["préparer","servir"]:
+        draw_rect(Rect2(-6,-29,13,7),Color("#D7B37E"))
+    draw_set_transform(Vector2.ZERO)
+    if mine:
+        draw_arc(pos,22.0,0,TAU,35,Color("#F3A45C"),2.8,true)
+    var name_offset: Vector2=pos+Vector2(0,-34)
+    var font: Font=ThemeDB.fallback_font
+    var name_width: float=font.get_string_size(label,HORIZONTAL_ALIGNMENT_LEFT,-1,14).x
+    draw_rect(Rect2(name_offset+Vector2(-name_width*0.5-6,-17),Vector2(name_width+12,21)),Color("#253B40CC"))
+    draw_string(font,name_offset+Vector2(-name_width*0.5,0),label,HORIZONTAL_ALIGNMENT_LEFT,-1,14,Color.WHITE)
+    if action!="libre":
+        draw_string(font,pos+Vector2(19,19),action,HORIZONTAL_ALIGNMENT_LEFT,-1,11,Color("#8A4F2C"))
 
 func _unhandled_input(event: InputEvent) -> void:
     if event is InputEventMouseButton:
-        if event.button_index==MOUSE_BUTTON_LEFT and event.pressed:
-            get_viewport().gui_release_focus()
         if event.button_index==MOUSE_BUTTON_WHEEL_UP and event.pressed:
-            zoom_override=clampf(zoom_override*1.12,0.56,3.0)
-            _resize()
+            _zoom_at_pointer(1.13)
             get_viewport().set_input_as_handled()
         elif event.button_index==MOUSE_BUTTON_WHEEL_DOWN and event.pressed:
-            zoom_override=clampf(zoom_override/1.12,0.56,3.0)
-            _resize()
+            _zoom_at_pointer(1.0/1.13)
+            get_viewport().set_input_as_handled()
+        elif event.button_index==MOUSE_BUTTON_MIDDLE:
+            camera_dragging=event.pressed
             get_viewport().set_input_as_handled()
         elif event.button_index==MOUSE_BUTTON_LEFT:
             if event.pressed:
-                var wp:=get_global_mouse_position()
-                var index:=_item_at(wp)
+                get_viewport().gui_release_focus()
+                var wp: Vector2=get_global_mouse_position()
+                var index: int=_item_at(wp)
                 if index>=0 and not locked:
                     selected_uid=int(_objects()[index].get("uid",-1))
                     dragging=true
@@ -751,8 +1007,12 @@ func _unhandled_input(event: InputEvent) -> void:
             queue_redraw()
             get_viewport().set_input_as_handled()
     elif event is InputEventMouseMotion:
-        if dragging:
-            var mousepos:=get_global_mouse_position()+drag_offset
+        if camera_dragging:
+            camera.position-=event.relative/camera.zoom.x
+            queue_redraw()
+            get_viewport().set_input_as_handled()
+        elif dragging:
+            var mousepos: Vector2=get_global_mouse_position()+drag_offset
             if _inside_kitchen(mousepos):
                 for obj in _objects():
                     if int(obj.get("uid",-1))==selected_uid:
@@ -765,6 +1025,18 @@ func _unhandled_input(event: InputEvent) -> void:
         if event.keycode==KEY_E:_perform_action()
         elif event.keycode==KEY_R:_rotate_selection()
         elif event.keycode==KEY_DELETE:_remove_selection()
+        elif event.keycode==KEY_F2:_toggle_blueprint()
+        elif event.keycode==KEY_F:_focus_kitchen()
+        elif event.keycode==KEY_ESCAPE:_set_action("libre",-1)
+
+func _zoom_at_pointer(multiplier: float) -> void:
+    var old: float = camera.zoom.x
+    var new_zoom: float = clampf(old*multiplier,0.34,2.65)
+    var screen_delta: Vector2 = get_viewport().get_mouse_position()-get_viewport_rect().size*0.5
+    camera.position += screen_delta*(1.0/old-1.0/new_zoom)
+    camera.zoom=Vector2.ONE*new_zoom
+    zoom_override=new_zoom
+    queue_redraw()
 
 func _on_room_ready(data: Dictionary) -> void:
     role_label.text="ANIMATEUR" if network.role=="host" else "PARTICIPANT"
@@ -840,6 +1112,7 @@ func _on_room_packet(packet: Dictionary) -> void:
             for i in participants.size():
                 if str(participants[i].get("id",""))==str(payload.get("id","")):
                     participants[i]["avatar"]["action"]=str(payload.get("action","libre"))
+                    participants[i]["avatar"]["target"]=payload.get("target",-1)
                     break
         "pause":
             paused=bool(payload.get("value",false))
