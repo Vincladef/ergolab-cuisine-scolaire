@@ -847,7 +847,7 @@ func _draw_equipment(o: Dictionary) -> void:
     var extent: Vector2 = dimensions*0.5
     draw_set_transform(center,angle)
     var tile: Rect2 = Rect2(-extent,dimensions)
-    draw_rect(tile.grow(5).translated(Vector2(3,4)),Color(0.09,0.15,0.17,0.22))
+    draw_rect(Rect2(tile.position+Vector2(0,4)-Vector2(5,5),tile.size+Vector2(10,10)),Color(0.09,0.15,0.17,0.22))
     # Équipements illustrés directement par Godot, avec des attributs reconnaissables.
     var metal: Color=Color("#D6E0DC")
     var edge: Color=Color("#708E90")
