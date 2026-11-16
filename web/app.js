@@ -11,7 +11,7 @@ const DEFAULT_STEPS=[
 ];
 const state={identity:null,ws:null,wsReady:false,room:null,scenarios:[],active:0,revision:1,players:[],paused:false,locked:false,workshop:null,selected:null,pendingType:null,pan:false,drag:false,zoom:0.47,offsetX:20,offsetY:20,grid:true,dirty:false,selectedTab:'conception',observationPin:null,lastDraw:0,lastMove:0,lastSync:0,clock:0,keys:new Set(),snapshot:{},localMove:null,disconnected:false};
 const source=new Image();source.src='/assets/plan_original.png';source.onload=()=>draw();const sprites={};for(const [id] of CATALOG){const im=new Image();im.src=`/assets/equipment/${id}.png`;im.onload=()=>draw();sprites[id]=im;}
-let toastTimer;function toast(s,error=false){const v=$('#toast');v.textContent=s;v.style.background=error?'#963d35':'#1e4141';v.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>v.classList.remove('show'),3600);}
+let toastTimer,reconnectTimer;function toast(s,error=false){const v=$('#toast');v.textContent=s;v.style.background=error?'#963d35':'#1e4141';v.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>v.classList.remove('show'),3600);}
 const escapeHTML=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
 const fmtTime=s=>new Date(s).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
 function persist(){if(state.identity)localStorage.setItem(STORAGE,JSON.stringify(state.identity));}
@@ -35,7 +35,7 @@ function applySnapshot(s){if(!s)return;state.scenarios=s.scenarios||[];state.act
 function connect(){if(!state.identity)return;try{state.ws?.close();const proto=location.protocol==='https:'?'wss:':'ws:';const ws=new WebSocket(`${proto}//${location.host}/api/ws`);state.ws=ws;
  ws.onopen=()=>{state.wsReady=true;state.disconnected=false;ws.send(JSON.stringify({op:'hello',...state.identity}));$('#connection').innerHTML='<span class="dot"></span> Temps réel';$('#connection').classList.add('online');};
  ws.onmessage=e=>{let p;try{p=JSON.parse(e.data);}catch{return;}if(p.kind==='welcome'||p.kind==='snapshot'){applySnapshot(p.state);return;}if(p.kind==='error'){toast(p.message||'Erreur réseau',true);if(String(p.message).includes('Conflit'))refreshRoom();return;}onPacket(p);};
- ws.onclose=()=>{state.wsReady=false;state.disconnected=true;$('#connection').innerHTML='<span class="dot"></span> Synchronisation HTTP';$('#connection').classList.remove('online');};
+ ws.onclose=()=>{if(state.ws!==ws)return;state.wsReady=false;state.disconnected=true;$('#connection').innerHTML='<span class="dot"></span> Synchronisation HTTP';$('#connection').classList.remove('online');clearTimeout(reconnectTimer);reconnectTimer=setTimeout(()=>{if(state.identity&&!document.hidden&&!state.wsReady)connect();},2500);};
  ws.onerror=()=>{state.wsReady=false;};
  }catch{state.wsReady=false;}}
 async function refreshRoom(){try{const r=await post('session',{action:'resume',...state.identity});applySnapshot(r.snapshot);}catch(e){toast('Actualisation impossible : '+e.message,true);}}
@@ -137,7 +137,9 @@ function makeScenarioPreview(scenario){
 async function exportPDF(){try{toast('Préparation du compte rendu…');const data={...state.identity,screens:state.scenarios.map(makeScenarioPreview)};const res=await fetch('/api/report',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(data)});if(!res.ok){const x=await res.json();throw new Error(x.error||'Erreur export');}const blob=await res.blob();if(!blob.size)throw new Error('Rapport vide');const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`ErgoLab-compte-rendu-${state.room}.pdf`;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),15000);toast('Compte rendu PDF généré');}catch(e){toast('Export PDF : '+e.message,true);}}
 
 async function start(){initPalette();bindActions();bindMap();bindKeyboard();window.addEventListener('resize',()=>{if(state.identity)fitMap();});const urlRoom=new URLSearchParams(location.search).get('s')||'';if(urlRoom)$('#room-input').value=urlRoom;try{const saved=JSON.parse(localStorage.getItem(STORAGE)||'null');if(saved?.id&&saved?.token&&saved?.room===urlRoom||saved?.id&&saved?.token&&!urlRoom){state.identity=saved;const data=await post('session',{action:'resume',...saved});openWorkspace(data.snapshot);setUrl(saved.room);connect();await fetchWorkshop();}}catch{localStorage.removeItem(STORAGE);}
- setInterval(async()=>{if(!state.identity||document.hidden)return;try{if(!state.wsReady){await refreshRoom();}await fetchWorkshop();}catch{}},10000);
+ setInterval(async()=>{if(state.identity&&!document.hidden&&!state.wsReady){try{await refreshRoom();}catch{}}},2500);
+ setInterval(async()=>{if(state.identity&&!document.hidden){try{await fetchWorkshop();}catch{}}},10000);
+ document.addEventListener('visibilitychange',()=>{if(!document.hidden&&state.identity&&!state.wsReady)connect();});
  setInterval(()=>{if(state.wsReady)state.ws.send(JSON.stringify({op:'ping'}));},12000);
 }
 start();

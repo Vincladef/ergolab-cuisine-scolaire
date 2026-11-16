@@ -215,6 +215,7 @@ func _construct_interface() -> void:
     left.add_child(left_scroll)
     var palette := VBoxContainer.new()
     palette.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    palette.custom_minimum_size.x = 220.0
     palette.add_theme_constant_override("separation", 5)
     left_scroll.add_child(palette)
     palette.add_child(_label("BIBLIOTHÈQUE", 13, ORANGE))
@@ -252,6 +253,7 @@ func _construct_interface() -> void:
     right.add_child(right_scroll)
     var controls := VBoxContainer.new()
     controls.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    controls.custom_minimum_size.x = 266.0
     controls.add_theme_constant_override("separation", 7)
     right_scroll.add_child(controls)
     controls.add_child(_label("SCÉNARIOS D'AMÉNAGEMENT", 12, ORANGE))
@@ -338,11 +340,16 @@ func _construct_interface() -> void:
     var foot := HBoxContainer.new()
     bottom.add_child(foot)
     status_label = _label("Prêt", 12, SUB)
+    status_label.autowrap_mode = TextServer.AUTOWRAP_OFF
+    status_label.custom_minimum_size.x = 320.0
     foot.add_child(status_label)
     var foot_fill := Control.new()
     foot_fill.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     foot.add_child(foot_fill)
-    foot.add_child(_label("Plan : cliquer-déplacer · Tourner : R · Zoom : molette · Agent : flèches ou WASD",11,SUB))
+    var foot_help := _label("Plan : cliquer-déplacer · Tourner : R · Zoom : molette · Agent : flèches ou WASD",11,SUB)
+    foot_help.autowrap_mode = TextServer.AUTOWRAP_OFF
+    foot_help.custom_minimum_size.x = 565.0
+    foot.add_child(foot_help)
 
     avatar_prompt = ConfirmationDialog.new()
     avatar_prompt.title = "Nouvel agent virtuel"
