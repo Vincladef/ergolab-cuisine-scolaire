@@ -80,6 +80,7 @@ func _ready() -> void:
     _refresh_scenarios()
     _activate_scenario(active_index, true)
     _set_status("Projet chargé · maquette fondée sur le plan du dossier")
+    call_deferred("_audit_canvas_layout")
     var from_url: String = network.room_from_url()
     if not from_url.is_empty():
         room_field.text = from_url
@@ -661,3 +662,7 @@ func _toggle_pause() -> void:
 func _toggle_lock() -> void:
     if network.role == "host":
         network.send_lock(not session_locked)
+
+func _audit_canvas_layout() -> void:
+    await get_tree().process_frame
+    print("ERGOLAB_CANVAS_GEOMETRY pos=", canvas.position, " size=", canvas.size, " visible=", canvas.is_visible_in_tree(), " parent=", canvas.get_parent().size)
