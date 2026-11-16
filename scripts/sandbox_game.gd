@@ -183,7 +183,7 @@ func _button(text: String, callback: Callable, accent: bool = false) -> Button:
     var b := Button.new()
     b.text = text
     b.clip_text = true
-    b.custom_minimum_size.y = 35
+    b.custom_minimum_size = Vector2(74,35)
     b.add_theme_font_size_override("font_size",12)
     b.add_theme_color_override("font_color",Color.WHITE if accent else INK)
     b.add_theme_stylebox_override("normal",_panel(ORANGE if accent else PAPER))
@@ -219,7 +219,7 @@ func _build_ui() -> void:
     title.custom_minimum_size.x = 250
     title.autowrap_mode = TextServer.AUTOWRAP_OFF
     head.add_child(title)
-    var material_button := _button("☰ Matériel",_toggle_palette)
+    var material_button := _button("Matériel",_toggle_palette)
     material_button.custom_minimum_size.x = 104
     head.add_child(material_button)
     name_input = LineEdit.new()
