@@ -182,6 +182,7 @@ func _label(text: String, font: int = 13, tint: Color = INK) -> Label:
 func _button(text: String, callback: Callable, accent: bool = false) -> Button:
     var b := Button.new()
     b.text = text
+    b.clip_text = true
     b.custom_minimum_size.y = 35
     b.add_theme_font_size_override("font_size",12)
     b.add_theme_color_override("font_color",Color.WHITE if accent else INK)
@@ -283,6 +284,7 @@ func _build_ui() -> void:
     stage_panel = PanelContainer.new()
     stage_panel.name = "CarteAtelier"
     stage_panel.add_theme_stylebox_override("panel",_panel(Color("#FFF9F0")))
+    stage_panel.clip_contents = true
     stage_panel.size = Vector2(208,336)
     ui_root.add_child(stage_panel)
     var controls := VBoxContainer.new()
@@ -721,7 +723,7 @@ func _toggle_pause() -> void:
         network.send_pause(not paused)
     else:
         paused=not paused
-        pause_button.text="Reprendre" if paused else "Mettre en pause"
+        pause_button.text="Reprendre" if paused else "Pause"
 
 func _toggle_lock() -> void:
     if network.has_room():
@@ -729,7 +731,7 @@ func _toggle_lock() -> void:
         network.send_lock(not locked)
     else:
         locked=not locked
-    lock_button.text="Déverrouiller les meubles" if locked else "Verrouiller les meubles"
+    lock_button.text="Débloquer" if locked else "Bloquer"
 
 func _add_observation() -> void:
     var txt:=obs_line.text.strip_edges()
@@ -1066,8 +1068,8 @@ func _on_room_state(state: Dictionary) -> void:
     participants=state.get("participants",[]).duplicate(true)
     pause_button.disabled=(network.role!="host")
     lock_button.disabled=(network.role!="host")
-    pause_button.text="Reprendre" if paused else "Mettre en pause"
-    lock_button.text="Déverrouiller les meubles" if locked else "Verrouiller les meubles"
+    pause_button.text="Reprendre" if paused else "Pause"
+    lock_button.text="Débloquer" if locked else "Bloquer"
     _refresh_scenarios()
     _refresh_people()
     queue_redraw()
@@ -1125,10 +1127,10 @@ func _on_room_packet(packet: Dictionary) -> void:
                     break
         "pause":
             paused=bool(payload.get("value",false))
-            pause_button.text="Reprendre" if paused else "Mettre en pause"
+            pause_button.text="Reprendre" if paused else "Pause"
         "lock":
             locked=bool(payload.get("value",false))
-            lock_button.text="Déverrouiller les meubles" if locked else "Verrouiller les meubles"
+            lock_button.text="Débloquer" if locked else "Bloquer"
     queue_redraw()
 
 
