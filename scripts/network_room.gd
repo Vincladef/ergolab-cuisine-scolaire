@@ -82,6 +82,14 @@ func _on_http_done(_result: int, code: int, _headers: PackedStringArray, body: P
     _connect_ws()
 
 func _read_identity() -> Dictionary:
+    # Share the anonymous identity with the web dashboard on the same origin.
+    if OS.has_feature("web"):
+        var raw: Variant = JavaScriptBridge.eval("window.localStorage.getItem('ergolab-room-identity-v2') || ''")
+        if raw is String and not raw.is_empty():
+            var identity: Variant = JSON.parse_string(raw)
+            if identity is Dictionary and identity.has("room") and identity.has("token"):
+                var room_id := str(identity.get("room", ""))
+                return {"rooms":{room_id:{"id":identity.get("id", ""),"token":identity.get("token", "")}}}
     if not FileAccess.file_exists(STORAGE):
         return {}
     var f := FileAccess.open(STORAGE, FileAccess.READ)
@@ -95,6 +103,10 @@ func _read_identity() -> Dictionary:
     return data
 
 func _store_identity(data: Dictionary) -> void:
+    if OS.has_feature("web") and not room.is_empty():
+        var transfer := {"room":room,"id":peer_id,"token":token,"role":role}
+        var encoded := JSON.stringify(JSON.stringify(transfer))
+        JavaScriptBridge.eval("window.localStorage.setItem('ergolab-room-identity-v2', " + encoded + ")")
     var f := FileAccess.open(STORAGE, FileAccess.WRITE)
     if f != null:
         f.store_string(JSON.stringify(data))

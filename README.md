@@ -1,54 +1,45 @@
-# ErgoLab | Cuisine scolaire | Simulation collaborative 2D
+# ErgoLab | Cuisine scolaire : atelier ergonomique collaboratif
 
-Prototype **Godot 4 (GDScript) + WebSocket + Neon PostgreSQL + Vercel**. La maquette se fonde sur les pages 5 (plan) et 6 (équipements) de `TP simulation en distanciel - consigne.pdf`.
+Application publiée sur Vercel, avec moteur **Godot 4.4.1 / GDScript** disponible dans `/simulateur/index.html` et tableau de bord de classe en accueil (`/`). Les étudiants peuvent rejoindre une salle sans compte, créer un avatar et jouer une situation de travail depuis une URL commune.
 
-## Ce qui a été développé
+## Fonctions
 
-- Plan issu du PDF, calibration approximative de 14,20 m = 608 pixels à contrôler avec la source architecturale ; le document est un raster, et non un fichier CAD coté exhaustivement.
-- Bibliothèque de 14 types de matériel, déplacements, rotations, duplication, configurations A/B, observations et grille métrique.
-- Salles isolées créées via un code aléatoire à 12 caractères, invitations sous `?s=CODE`, aucun compte à créer.
-- Chaque participant choisit un pseudonyme et une couleur d'avatar. Il le déplace au clavier ou à la souris ; les autres voient sa position via WebSocket.
-- Actions contextualisées : préparation, cuisson, charge, pousse d'un chariot, plonge, service, nettoyage, livraison, attente. **La plupart sont des annotations d'activité ; seule la pousse de chariot modifie sa position.**
-- Collision simplifiée avec les équipements et les autres agents ; vitesse plus lente avec charge ou chariot ; tracés enregistrés en base.
-- L'animateur de la salle peut mettre en pause et verrouiller les aménagements. Les autres membres peuvent modifier l'agencement lorsque celui-ci est déverrouillé.
-- Reconnexion automatique, sauvegarde des identités de plusieurs salles dans `user://`, états et événements dans Neon.
-- Diffusion de mouvements entre les instances Vercel au moyen du journal d'événements en base consulté à intervalle court ; les messages prennent généralement moins d'une seconde mais ce n'est pas une garantie de latence.
+- **Séance 1 : repères**. Définition des contraintes de travail et exigences de conception, conservées dans Neon.
+- **Séances 2 et 3 : aménagement**. Fond du plan de la future cuisine, PDF p.5, et catalogue d'équipements, p.6. Placement, rotation, duplication des variantes, notes et édition partagée.
+- **Séance 4 : simulation**. Pseudonyme, avatar, clavier ZQSD/WASD/flèches, actions au poste le plus proche, salle partagée, animateur (pause, verrouillage, lancement de séquences et déclenchement de scripts chronologiques).
+- **Analyse**. Journal des événements, observations humaines catégorisées (manutention, posture, accident, coordination, flux, obstacles et circulation), métriques exploratoires (distance, attente déclarée, proximités temporelles), comparatif par séquence et rapport PDF avec visuels de tous les scénarios.
+- **Collaboration**. WebSocket avec journal d'événements partagé via Neon ; secours HTTP lorsque le WebSocket est indisponible. Identité anonyme conservée localement pour retrouver son avatar après actualisation.
 
 ## Architecture
 
-```text
-Godot Web (GDScript)
-    ├─ POST /api/session : créer, rejoindre, reprendre sa place
-    └─ WSS /api/ws : mouvements, actions, scénarios, contrôle animateur
-                       └─ Neon PostgreSQL
-                           rooms / room_participants / room_events
-```
+- `project.godot`, `main.tscn`, `scripts/` : projet Godot, export Web sur `/simulateur/`.
+- `web/` : interface native HTML/CSS/JavaScript en accueil, avec visualisation métrique 2D du même plan, jeu d'avatars et pilotage de l'atelier.
+- `api/session.js`, `api/ws.js`, `api/command.js`, `api/workshop.js`, `api/report.js` : routes Vercel.
+- `server/model.js`, `server/workshop.js`, `server/analysis.js` : règles, persistance et calculs.
+- `sql/001_initial.sql`, `sql/002_workshop.sql` : schéma de base.
+- `.github/workflows/build-web.yml` : tests Node, import Godot headless, export Web dans `docs/`, commit des artefacts compilés. Vercel publie `public/` produit par `npm run build`.
 
-Le serveur garde les décisions d'autorisation. Les tokens d'identité, envoyés dans le corps de requêtes privées, ne sont **jamais publiés dans le dépôt GitHub**. Les liens de salles ne confèrent pas les droits d'animateur.
+## Publication
 
-## Installation
-
-1. Créer une base Neon dédiée et appliquer `sql/001_initial.sql` (déjà fait dans le projet Neon `calm-dream-89015446`).
-2. Définir `DATABASE_URL` dans les variables chiffrées Vercel, pour les environnements voulus (déjà configuré dans le projet Vercel `ergolab-cuisine-scolaire`).
-3. Connecter le dépôt GitHub `Vincladef/ergolab-cuisine-scolaire` à Vercel. **Attention : l'association GitHub → Vercel doit être autorisée dans Vercel**.
-4. Publier les sources sur la branche `main`. GitHub Actions installe Godot 4.4.1, teste les fichiers serveur et produit un export Godot Web dans `docs/`, qu'il commite sur `main`.
-5. Le déploiement Vercel, lancé après ce commit, exécute `npm run build`, qui copie `docs/` dans `public/`. Les Functions `api/session.js` et `api/ws.js` sont déployées côté serveur.
-6. Accéder au site public, créer une salle puis inviter les élèves et le professeur grâce au lien.
+1. Associer le dépôt à un projet Vercel, à la racine du dépôt.
+2. Définir `DATABASE_URL` uniquement dans les variables sécurisées du projet Vercel.
+3. Appliquer les migrations SQL sur une base dédiée.
+4. Vercel installe les dépendances et exécute `npm run build`, qui copie le tableau de bord, les planches d'équipements et l'export Web Godot.
+5. Chaque push sur `main` déclenche les tests et l'export Godot dans GitHub Actions. Le workflow actualise `docs/` et Vercel republie la compilation.
 
 ## Tests
 
-```sh
-npm test
-npm run check
-```
+- `npm test` : validation du script, données de plan, métriques, collisions d'équipements et absence de credentials dans le client.
+- `npm run check` : vérification syntaxique du code JavaScript.
+- Validation manuelle en production : deux navigateurs indépendants, création/reconnexion, enregistrement des scripts, déplacements partagés, annotations, duplication de scénario, téléchargement PDF et vérification visuelle sur desktop/mobile.
 
-La compilation et l'interaction Godot doivent également être testées dans GitHub Actions puis dans un navigateur. Les tests Node ne suffisent pas à certifier l'ensemble de l'application.
+## Précautions ergonomiques
 
-## Limites ergonomiques importantes
+La scène est un **support de simulation participative**, pas un calculateur de pénibilité. La calibration `42,82 px/m` est une approximation issue de la cote de 14,20 m du PDF p.5. Les volumes, portes, dégagements et cheminements doivent être confirmés sur les documents cotés de l'architecte. Les proximités spatio-temporelles ne constituent pas une détection validée de collisions ni un diagnostic de TMS. Les temps d'attente proviennent des actions « attendre » déclarées. Les observations des agents doivent primer sur les chiffres.
 
-- Les murs et passages sont visibles sur la **rasterisation du plan**, mais il n'y a **pas encore de collision géométrique fidèle aux murs/portes**. Les collisions portent sur les équipements et les avatars. Ne pas utiliser pour valider les dégagements réglementaires.
-- Les dimensions de meubles proviennent d'une extraction graphique indicative ; confirmer sur les cotes et références des équipements.
-- Les mesures de distance et d'occupation ne diagnostiquent ni TMS ni charge mentale. Elles soutiennent l'entretien et la simulation participative.
-- Les rôles et interactions sont une base d'atelier, pas une simulation complète des gestes professionnels.
-- La synchronisation multi-instances utilise une interrogation du journal Neon. À forte charge, préférer un bus de publication dédié (Redis/Upstash), pour limiter la sollicitation de la base.
-- Les mouvements de chariot reposent sur une logique simplifiée. Des tests utilisateurs et un durcissement du protocole restent nécessaires avant un usage public prolongé.
+## Limites restant à valider
+
+- Relevé métrique exact des parois, passages, sens des portes, capacités des équipements ; le fond raster n'offre pas à lui seul une géométrie physique fiable.
+- Validation ergonomique des manutentions et postures en situation réelle.
+- Tests de charge avec l'effectif d'une classe entière et vérification de tous les navigateurs (Chromium testé ; Firefox et Safari restent à tester).
+- Le moteur Godot autonome et l'interface web sont deux clients de la même salle ; l'interface web sert de console principale d'atelier.

@@ -125,28 +125,42 @@ func _space(h: float = 12.0) -> Control:
 
 func _construct_interface() -> void:
     var body := VBoxContainer.new()
-    body.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     body.add_theme_constant_override("separation", 0)
     add_child(body)
+    body.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     var top := PanelContainer.new()
     top.custom_minimum_size.y = 68
     top.add_theme_stylebox_override("panel", _panel_style(PANEL))
     body.add_child(top)
     var header := HBoxContainer.new()
     header.add_theme_constant_override("separation", 12)
+    header.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     top.add_child(header)
     var brand := VBoxContainer.new()
+    brand.custom_minimum_size.x = 335.0
     brand.add_theme_constant_override("separation", 2)
     header.add_child(brand)
-    brand.add_child(_label("ERGOLAB  /  ATELIER NUMÉRIQUE", 17, INK))
-    brand.add_child(_label("Conception participative · Cuisine scolaire", 11, SUB))
+    var title_label := _label("ERGOLAB  /  ATELIER NUMÉRIQUE", 17, INK)
+    title_label.autowrap_mode = TextServer.AUTOWRAP_OFF
+    brand.add_child(title_label)
+    var subtitle := _label("Conception participative · Cuisine scolaire", 11, SUB)
+    subtitle.autowrap_mode = TextServer.AUTOWRAP_OFF
+    brand.add_child(subtitle)
     var filler := Control.new()
     filler.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     header.add_child(filler)
-    header.add_child(_button("−",func(): canvas.zoom_by(0.82)))
-    header.add_child(_button("+",func(): canvas.zoom_by(1.22)))
-    header.add_child(_button("Cadrer",func(): canvas.fit_to_view()))
-    header.add_child(_button("Copier JSON",_copy_json))
+    var zoom_minus := _button("−",func(): canvas.zoom_by(0.82))
+    zoom_minus.custom_minimum_size.x = 52
+    header.add_child(zoom_minus)
+    var zoom_plus := _button("+",func(): canvas.zoom_by(1.22))
+    zoom_plus.custom_minimum_size.x = 52
+    header.add_child(zoom_plus)
+    var fit_button := _button("Cadrer",func(): canvas.fit_to_view())
+    fit_button.custom_minimum_size.x = 80
+    header.add_child(fit_button)
+    var export_button := _button("Copier JSON",_copy_json)
+    export_button.custom_minimum_size.x = 115
+    header.add_child(export_button)
 
     var room_bar := PanelContainer.new()
     room_bar.custom_minimum_size.y = 54
@@ -155,7 +169,10 @@ func _construct_interface() -> void:
     var room_controls := HBoxContainer.new()
     room_controls.add_theme_constant_override("separation",8)
     room_bar.add_child(room_controls)
-    room_controls.add_child(_label("SALLES EN DIRECT",12,ORANGE))
+    var room_title := _label("SALLES EN DIRECT",12,ORANGE)
+    room_title.custom_minimum_size.x = 120
+    room_title.autowrap_mode = TextServer.AUTOWRAP_OFF
+    room_controls.add_child(room_title)
     name_field = LineEdit.new()
     name_field.custom_minimum_size.x = 140
     name_field.placeholder_text = "Ton pseudonyme"
@@ -166,13 +183,19 @@ func _construct_interface() -> void:
     for i in range(ROOM_COLORS.size()):
         color_picker.add_item("Couleur " + str(i+1),i)
     room_controls.add_child(color_picker)
-    room_controls.add_child(_button("Créer une salle",_create_room,false))
+    var create_button := _button("Créer une salle",_create_room,false)
+    create_button.custom_minimum_size.x = 120
+    room_controls.add_child(create_button)
     room_field = LineEdit.new()
     room_field.placeholder_text = "Code de salle"
     room_field.custom_minimum_size.x = 142
     room_controls.add_child(room_field)
-    room_controls.add_child(_button("Rejoindre",_join_room))
-    room_controls.add_child(_button("Copier le lien",_copy_room_link))
+    var join_button := _button("Rejoindre",_join_room)
+    join_button.custom_minimum_size.x = 85
+    room_controls.add_child(join_button)
+    var share_button := _button("Copier le lien",_copy_room_link)
+    share_button.custom_minimum_size.x = 116
+    room_controls.add_child(share_button)
     room_details = _label("Mode local · aucune salle connectée",11,SUB)
     room_details.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     room_controls.add_child(room_details)
