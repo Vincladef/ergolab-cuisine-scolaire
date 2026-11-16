@@ -5,6 +5,9 @@ on:
     paths-ignore:
       - 'docs/**'
   workflow_dispatch:
+concurrency:
+  group: ergolab-godot-web-main
+  cancel-in-progress: true
 permissions:
   contents: write
 jobs:
@@ -27,6 +30,10 @@ jobs:
           cache: true
       - name: Import and validate Godot project
         run: godot --headless --editor --path . --quit
+      - name: Validate runtime scene and GDScript
+        run: |
+          godot --headless --path . --quit-after 5 2>&1 | tee /tmp/ergolab-godot-validate.log
+          ! grep -E "SCRIPT ERROR|Parse Error|Failed to load script" /tmp/ergolab-godot-validate.log
       - name: Export Godot Web
         run: |
           mkdir -p docs
@@ -40,5 +47,7 @@ jobs:
           git add -f docs/
           if ! git diff --cached --quiet; then
             git commit -m 'Export Godot Web [skip ci]'
+            git fetch origin main
+            git rebase origin/main
             git push origin HEAD:main
           fi

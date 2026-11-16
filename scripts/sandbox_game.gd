@@ -692,7 +692,7 @@ func _draw_avatar(person: Dictionary) -> void:
         draw_arc(pos+Vector2(21,-29+bob),4,0,TAU,12,Color("#53ABD0"),2,true)
     elif doing=="pousser":
         draw_line(pos+Vector2(8,-5+bob),pos+Vector2(24,-8+bob),Color.WHITE,3,true)
-    var is_mine:=str(person.get("id",""))==network.peer_id if network.has_room() else true
+    var is_mine: bool = (str(person.get("id","")) == network.peer_id) if network.has_room() else true
     if is_mine:
         draw_arc(pos,21,0,TAU,30,ORANGE,2.3,true)
     draw_string(ThemeDB.fallback_font,pos+Vector2(19,-4),name,HORIZONTAL_ALIGNMENT_LEFT,-1,15,INK)
