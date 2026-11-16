@@ -238,7 +238,7 @@ func add_equipment(type_id: String) -> void:
 
 func add_avatar(label: String) -> void:
     var middle := to_world(size * 0.5)
-    var color := ["#CE6D3C", "#3C82B5", "#639F76", "#9B72BA", "#C59D40"][next_uid % 5]
+    var color: String = str(["#CE6D3C", "#3C82B5", "#639F76", "#9B72BA", "#C59D40"][next_uid % 5])
     var obj := {
         "uid": next_uid, "type": "avatar", "name": label,
         "x": middle.x + (next_uid % 4) * 22.0,
