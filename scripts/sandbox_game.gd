@@ -111,9 +111,18 @@ func _ready() -> void:
     get_viewport().size_changed.connect(_resize)
     call_deferred("_resize")
     var room_code: String = network.room_from_url()
+    var saved: Dictionary = network._read_identity()
+    var known: Dictionary = saved.get("rooms",{})
     if not room_code.is_empty():
         room_input.text = room_code
-        _status("Invitation reçue. Entre ton pseudonyme, puis rejoins la salle.")
+        if known.has(room_code):
+            network.enter_room(room_code,name_input.text,AVATAR_COLORS[color_index])
+        else:
+            _status("Invitation reçue. Entre ton pseudonyme, puis rejoins la salle.")
+    elif not known.is_empty():
+        var previous: String = str(known.keys()[0])
+        room_input.text = previous
+        network.enter_room(previous,name_input.text,AVATAR_COLORS[color_index])
     else:
         _status("Bac à sable prêt. Déplace ton avatar avec les flèches ou ZQSD, ou clique dans le plan.")
     set_process(true)
@@ -179,7 +188,9 @@ func _build_ui() -> void:
     name_input = LineEdit.new()
     name_input.placeholder_text = "Ton pseudonyme"
     name_input.text = "Participant"
-    name_input.custom_minimum_size.x = 140
+    name_input.custom_minimum_size = Vector2(140,38)
+    name_input.add_theme_color_override("font_color",INK)
+    name_input.add_theme_stylebox_override("normal",_panel(PAPER))
     head.add_child(name_input)
     color_button = _button("● Couleur",_cycle_color)
     color_button.custom_minimum_size.x = 86
@@ -187,7 +198,9 @@ func _build_ui() -> void:
     head.add_child(_button("Créer une salle",_new_room,true))
     room_input = LineEdit.new()
     room_input.placeholder_text = "Code de salle"
-    room_input.custom_minimum_size.x = 135
+    room_input.custom_minimum_size = Vector2(135,38)
+    room_input.add_theme_color_override("font_color",INK)
+    room_input.add_theme_stylebox_override("normal",_panel(PAPER))
     head.add_child(room_input)
     head.add_child(_button("Rejoindre",_join_room))
     head.add_child(_button("Lien",_copy_link))
@@ -195,6 +208,9 @@ func _build_ui() -> void:
     grow.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     head.add_child(grow)
     role_label = _label("LOCAL",12,GREEN)
+    role_label.custom_minimum_size.x = 115
+    role_label.autowrap_mode = TextServer.AUTOWRAP_OFF
+    role_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
     head.add_child(role_label)
 
     var left := PanelContainer.new()
@@ -256,6 +272,8 @@ func _build_ui() -> void:
     actions.add_child(scenario_picker)
     scenario_title = LineEdit.new()
     scenario_title.placeholder_text = "Nom de l'aménagement"
+    scenario_title.add_theme_color_override("font_color",INK)
+    scenario_title.add_theme_stylebox_override("normal",_panel(PAPER))
     scenario_title.text_submitted.connect(func(_v): _rename_scenario())
     actions.add_child(scenario_title)
     actions.add_child(_button("Renommer",_rename_scenario))
@@ -701,6 +719,8 @@ func _draw_avatar(person: Dictionary) -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
     if event is InputEventMouseButton:
+        if event.button_index==MOUSE_BUTTON_LEFT and event.pressed:
+            get_viewport().gui_release_focus()
         if event.button_index==MOUSE_BUTTON_WHEEL_UP and event.pressed:
             zoom_override=clampf(zoom_override*1.12,0.56,3.0)
             _resize()
