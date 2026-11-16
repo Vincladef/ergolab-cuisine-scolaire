@@ -98,7 +98,7 @@ export async function interaction(room,id,data){
  const sql=db(); const [r]=await sql`SELECT paused,scenarios,active_index FROM rooms WHERE id=${room}`;
  if(!r||r.paused)throw new Error('Simulation en pause');
  const action=cleanAction(data.action);
- const target=Number.isSafeInteger(data.target)?data.target:null;
+ const target=Number.isSafeInteger(data.target)&&data.target>0?data.target:null;
  const [p]=await sql`SELECT avatar FROM room_participants WHERE room_id=${room} AND id=${id}`;
  if(!p)throw new Error('Avatar inconnu');
  const objects=r.scenarios[r.active_index]?.objects||[];
