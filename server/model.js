@@ -7,7 +7,16 @@ const hash = token => crypto.createHash('sha256').update(String(token)).digest('
 const eq = (a,b) => typeof a==='string' && typeof b==='string' && a.length===b.length && crypto.timingSafeEqual(Buffer.from(a),Buffer.from(b));
 export const ROOM_ID = /^[a-f0-9]{12}$/;
 const sanitizeRoomId = id => (typeof id==='string' && ROOM_ID.test(id) ? id : null);
-const DEFAULT_SCENARIOS = [{name:'Scénario A · à aménager',notes:'Plan de la future cuisine, PDF page 5.',objects:[]},{name:'Scénario B · variante',notes:'Comparer les trajets et la coactivité.',objects:[]}];
+const DEFAULT_SCENARIOS = [
+ {name:'Exemple à modifier',notes:'Disposition pédagogique d’exemple ; l’implantation n’est pas fournie dans le plan architectural.',objects:[
+  {uid:1,type:'frigo',x:835,y:274,rot:0},{uid:2,type:'etagere',x:850,y:346,rot:0},
+  {uid:3,type:'evier',x:927,y:322,rot:0},{uid:4,type:'table',x:861,y:455,rot:0},
+  {uid:5,type:'cuisson',x:1125,y:426,rot:0},{uid:6,type:'sauteuse',x:1110,y:490,rot:0},
+  {uid:7,type:'plonge',x:1030,y:490,rot:0},{uid:8,type:'chariot',x:965,y:520,rot:0},
+  {uid:9,type:'four',x:1133,y:530,rot:0}
+ ]},
+ {name:'Plan vierge',notes:'Construisez votre aménagement à partir du local vide.',objects:[]}
+];
 function publicParticipant(p){return {id:p.id,nickname:p.nickname,color:p.color,role:p.role,avatar:p.avatar,connected:new Date(p.last_seen_at).getTime()>Date.now()-30000};}
 export async function snapshot(roomId){
  const sql=db(); const [r]=await sql`SELECT id,scenarios,active_index,revision,paused,locked FROM rooms WHERE id=${roomId}`;
@@ -64,12 +73,16 @@ export async function move(room,id,data) {
  const sql=db();const [r]=await sql`SELECT paused,scenarios,active_index FROM rooms WHERE id=${room}`;
  if(!r||r.paused)throw new Error('Simulation en pause');
  const x=Number(data.x), y=Number(data.y);
- if(!canMoveAvatar(x,y,r.scenarios,r.active_index)){await event(room,id,'blocked',{x,y,reason:'obstacle'});throw new Error('Déplacement bloqué par un obstacle');}
- const sqlOthers=await sql`SELECT id,avatar FROM room_participants WHERE room_id=${room} AND id<>${id} AND last_seen_at>now()-interval '30 seconds'`;
- if(sqlOthers.some(p=>Math.hypot(x-Number(p.avatar?.x||0),y-Number(p.avatar?.y||0))<24)){await event(room,id,'blocked',{x,y,reason:'coactivite'});throw new Error('Déplacement bloqué par un autre agent');}
  const [p]=await sql`SELECT avatar FROM room_participants WHERE room_id=${room} AND id=${id}`;
  if(!p)throw new Error('Avatar inconnu');
  const current=p.avatar||{};
+ const pushingUid=current.action==='pousser'&&Number.isSafeInteger(current.target)?current.target:0;
+ if(!validatePosition(x,y)||obstacleAt(x,y,r.scenarios[r.active_index]?.objects||[],pushingUid)){
+   await event(room,id,'blocked',{x,y,reason:'obstacle'});
+   throw new Error('Déplacement bloqué par un obstacle');
+ }
+ const sqlOthers=await sql`SELECT id,avatar FROM room_participants WHERE room_id=${room} AND id<>${id} AND last_seen_at>now()-interval '30 seconds'`;
+ if(sqlOthers.some(p=>Math.hypot(x-Number(p.avatar?.x||0),y-Number(p.avatar?.y||0))<24)){await event(room,id,'blocked',{x,y,reason:'coactivite'});throw new Error('Déplacement bloqué par un autre agent');}
  // The client provides the position; any implausible jump is refused except an initial spawn.
  const dx=x-Number(current.x||980),dy=y-Number(current.y||440);
  if(Math.hypot(dx,dy)>100)throw new Error('Déplacement trop important');
@@ -108,7 +121,7 @@ export async function interaction(room,id,data){
  if(target!==null && !obj)throw new Error('Poste introuvable');
  if(obj && Math.hypot(obj.x-p.avatar.x,obj.y-p.avatar.y)>140)throw new Error('Rapproche-toi du poste');
  const allowed={préparer:['table','evier','eplucheuse','frigo'],cuisiner:['cuisson','marmite','sauteuse','four','friteuse'],
-   porter:['chariot','table','frigo','meuble_chaud'],pousser:['chariot'],plonge:['plonge','evier'],
+   porter:['chariot','table','frigo','meuble_chaud','etagere'],pousser:['chariot'],plonge:['plonge','evier','lave_mains'],
    servir:['table','meuble_chaud','chariot'],nettoyer:['plonge','evier','table']};
  if(allowed[action] && (!obj || !allowed[action].includes(obj.type)))throw new Error('Choisis un poste adapté à cette action');
  const next={...p.avatar,action,target:obj?.uid??null};
