@@ -330,15 +330,6 @@ func _build_ui() -> void:
     people_label = _label("1 participant",10,MUTED)
     controls.add_child(people_label)
 
-    var prompt_frame := PanelContainer.new()
-    prompt_frame.name = "InvitationAction"
-    prompt_frame.add_theme_stylebox_override("panel",_panel(Color("#173A44")))
-    prompt_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    ui_root.add_child(prompt_frame)
-    hint_label = _label("ZQSD / flèches : marcher     ·     E : utiliser un poste",12,Color.WHITE)
-    hint_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    prompt_frame.add_child(hint_label)
-
     var bottom := PanelContainer.new()
     bottom.name = "BarreÉtat"
     bottom.add_theme_stylebox_override("panel",_panel(DARK))
@@ -395,9 +386,6 @@ func _resize() -> void:
     stage_panel.position = Vector2(screen.x-223.0,72)
     stage_panel.size = Vector2(210,minf(425.0,maxf(240.0,screen.y-147.0)))
     stage_panel.visible = screen.x>900.0
-    var action_card: Control = ui_root.get_node("InvitationAction")
-    action_card.size = Vector2(minf(400.0,screen.x*0.44),47)
-    action_card.position = Vector2(screen.x*0.5-action_card.size.x*0.5,screen.y-104.0)
     if not viewport_initialized:
         viewport_initialized = true
         _focus_kitchen()
@@ -793,6 +781,27 @@ func _draw() -> void:
     if has_waypoint:
         draw_arc(waypoint,10.0,0,TAU,28,Color("#D8804A"),2.6,true)
         draw_circle(waypoint,3.0,Color("#D8804A"))
+    _draw_interaction_hint()
+
+func _draw_interaction_hint() -> void:
+    var nearby: int=_nearest_equipment(115.0)
+    var a: Dictionary=_my_avatar()
+    var doing: String=str(a.get("action","libre"))
+    if nearby<0 and doing=="libre":
+        return
+    var message: String="E : arrêter" if doing!="libre" else "E : interagir"
+    if nearby>=0 and doing=="libre":
+        for obj in _objects():
+            if int(obj.get("uid",-1))==nearby:
+                message="E : "+str(equipment_labels.get(str(obj.get("type","")),"utiliser"))
+                break
+    var location: Vector2=_my_pos()+Vector2(0,42)
+    var font: Font=ThemeDB.fallback_font
+    var width_text: float=font.get_string_size(message,HORIZONTAL_ALIGNMENT_LEFT,-1,13).x
+    var box: Rect2=Rect2(location.x-width_text*0.5-12,location.y-15,width_text+24,27)
+    draw_rect(box,Color("#24424DEB"))
+    draw_rect(box,Color("#F0CC91"),false,1.2)
+    draw_string(font,location+Vector2(-width_text*0.5,4),message,HORIZONTAL_ALIGNMENT_LEFT,-1,13,Color.WHITE)
 
 func _paint_floor(poly: PackedVector2Array, base: Color, grout: Color, title: String, caption_at: Vector2, subtitle: String) -> void:
     draw_colored_polygon(poly,Color(0.10,0.19,0.18,0.18))
