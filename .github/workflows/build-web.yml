@@ -1,4 +1,4 @@
-name: Compile Godot vers Web
+name: Build and publish Godot Web
 on:
   push:
     branches: [main]
@@ -8,30 +8,37 @@ on:
 permissions:
   contents: write
 jobs:
-  export-web:
+  web:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Node checks
+        run: npm test && npm run check
       - uses: chickensoft-games/setup-godot@v2
         with:
           version: 4.4.1
           use-dotnet: false
           include-templates: true
           cache: true
-      - name: Import et vérification
+      - name: Import and validate Godot project
         run: godot --headless --editor --path . --quit
-      - name: Générer l'application Web
+      - name: Export Godot Web
         run: |
           mkdir -p docs
           godot --headless --path . --export-release Web docs/index.html
           test -s docs/index.html
           test -n "$(find docs -maxdepth 1 -name '*.wasm' -print -quit)"
-      - name: Publier les fichiers compilés dans docs
+      - name: Commit compiled static files
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -f docs/
           if ! git diff --cached --quiet; then
-            git commit -m 'Exporter Godot Web [skip ci]'
+            git commit -m 'Export Godot Web [skip ci]'
             git push origin HEAD:main
           fi

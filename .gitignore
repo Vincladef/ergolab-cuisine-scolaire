@@ -1,4 +1,6 @@
 .godot/
-.import/
-.DS_Store
-*.translation
+node_modules/
+.vercel/
+.env*
+!.env.example
+public/
